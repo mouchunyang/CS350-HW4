@@ -10,6 +10,17 @@
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 
+//changed:initialize an array for counters
+#define page_num    (PHYSTOP/PGSIZE)
+struct{
+  char counter[page_num];
+  struct spinlock counter_lock;
+}counter_struct;
+
+for(int i=0;i<page_num;i++){
+    counter_struct.counter[i]=0;
+}
+
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
 void
@@ -190,6 +201,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   memset(mem, 0, PGSIZE);
   mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
   memmove(mem, init, sz);
+  counter_struct.counter[mem/PGSIZE]=1;
 }
 
 // Load a program segment into pgdir.  addr must be page-aligned
@@ -244,6 +256,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       kfree(mem);
       return 0;
     }
+    counter_struct.counter[mem/PGSIZE]+=1;
   }
   return newsz;
 }
@@ -271,8 +284,18 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       if(pa == 0)
         panic("kfree");
       char *v = P2V(pa);
-      kfree(v);
-      *pte = 0;
+      //changed
+      if(counter_struct.counter[v]==1){
+        kfree(v);
+        *pte = 0;
+      }
+      else{
+        counter_struct.counter[v/PGSIZE]=counter_struct.counter[v/PGSIZE]-1;
+        if(counter_struct.counter[v/PGSIZE]==1){
+          *pte=(*pte)&(~PTE_S); //delete its share flag
+          *pte=(*pte)|PTE_W; //add a writtable flag
+        }
+      }
     }
   }
   return newsz;
@@ -392,3 +415,38 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 //PAGEBREAK!
 // Blank page.
 
+
+//changed: cow()
+pde_t*
+cow(pde_t *pgdir, uint sz)
+{
+  pde_t *d;
+  pte_t *pte;
+  uint pa, i, flags;
+  char *mem;
+
+  if((d = setupkvm()) == 0)
+    return 0;
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+      panic("copyuvm: pte should exist");
+    if(!(*pte & PTE_P))
+      panic("copyuvm: page not present");
+    pa = PTE_ADDR(*pte);
+
+    *pte=(*pte)|(PTE_S); //add its share flag
+    *pte=(*pte)&(~PTE_W); //delete its writtable flag
+    flags = PTE_FLAGS(*pte);
+
+    if(mappages(d,(void*)i,PGSIZE,pa,flags)<0){
+      goto bad;
+    }
+    counter_struct.counter[i/PGSIZE]=counter_struct.counter[i/PGSIZE]+1;
+  }
+  lcr3(V2P(pgdir));
+  return d;
+
+bad:
+  freevm(d);
+  return 0;
+}
