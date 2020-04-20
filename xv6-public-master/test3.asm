@@ -610,10 +610,12 @@ SYSCALL(uptime)
  37a:	b8 0e 00 00 00       	mov    $0xe,%eax
  37f:	cd 40                	int    $0x40
  381:	c3                   	ret    
- 382:	66 90                	xchg   %ax,%ax
- 384:	66 90                	xchg   %ax,%ax
- 386:	66 90                	xchg   %ax,%ax
- 388:	66 90                	xchg   %ax,%ax
+
+00000382 <procdump>:
+SYSCALL(procdump)
+ 382:	b8 16 00 00 00       	mov    $0x16,%eax
+ 387:	cd 40                	int    $0x40
+ 389:	c3                   	ret    
  38a:	66 90                	xchg   %ax,%ax
  38c:	66 90                	xchg   %ax,%ax
  38e:	66 90                	xchg   %ax,%ax

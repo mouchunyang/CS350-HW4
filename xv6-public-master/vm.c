@@ -254,6 +254,22 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
+
+    /*
+    pte_t* pte = walkpgdir(pgdir, (char*)a, 0);
+    cprintf("Virtual address is %d\n",a);
+    if((*pte)&(PTE_P)&&(*pte)&(PTE_U)){
+      uint pa=PTE_ADDR(*pte);
+      cprintf("minus one on %d\n",pa/PGSIZE);
+      if(counter_struct.counter[pa/PGSIZE]==1){
+        counter_struct.counter[pa/PGSIZE]=counter_struct.counter[pa/PGSIZE]-1;
+      }
+      else{
+        counter_struct.counter[pa/PGSIZE]=counter_struct.counter[pa/PGSIZE]-1;
+      }
+    }*/
+
+
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);
@@ -263,8 +279,18 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     acquire(&counter_struct.counter_lock);
     counter_struct.counter[V2P(mem)/PGSIZE]+=1;
     release(&counter_struct.counter_lock);
+
+    /*
+    pte = walkpgdir(pgdir, (char*)a, 0);
+    cprintf("allocating physical page number %d at virtual address %d \n",PTE_ADDR(*pte)>>12,a);
+    if((*pte)&(PTE_W)){
+      cprintf("writtable\n");
+    }
+    else{
+      cprintf("not writtable\n");
+    }*/
   }
-  
+  //cprintf("Counter is: %d\n",counter_struct.counter[57210]);
   return newsz;
 }
 
@@ -297,19 +323,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       if(counter_struct.counter[pa/PGSIZE]==1){
         counter_struct.counter[pa/PGSIZE]=counter_struct.counter[pa/PGSIZE]-1;
         kfree(v);
-        *pte = 0;
+        //cprintf("delete %d\n",pa>>12);
       }
       else{
         counter_struct.counter[pa/PGSIZE]=counter_struct.counter[pa/PGSIZE]-1;
-        if(counter_struct.counter[pa/PGSIZE]==1){
-          if((*pte)&(PTE_S)){
-            //if it is writtable originally
-            *pte=(*pte)|PTE_W; //add a writtable flag
-          }
-          *pte=(*pte)&(~PTE_S); //set its share flag to 0
-        }
       }
       release(&counter_struct.counter_lock);
+      *pte = 0;
     }
   }
   return newsz;
@@ -443,9 +463,9 @@ cow(pde_t *pgdir, uint sz)
     return 0;
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvm: pte should exist");
+      panic("cow: pte should exist");
     if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
+      panic("cow: page not present");
     pa = PTE_ADDR(*pte);
 
     if((*pte)&(PTE_W)){
@@ -454,6 +474,7 @@ cow(pde_t *pgdir, uint sz)
       *pte=(*pte)|(PTE_S);
     }
     *pte=(*pte)&(~PTE_W); //set writtable flag to 0 no matter what
+    //cprintf("Setting %d to read-only\n",pa>>12);
     flags = PTE_FLAGS(*pte);
 
     if(mappages(d,(void*)i,PGSIZE,pa,flags)<0){
@@ -464,6 +485,7 @@ cow(pde_t *pgdir, uint sz)
     release(&counter_struct.counter_lock);
   }
   lcr3(V2P(pgdir));
+
   return d;
 
 bad:
@@ -484,18 +506,28 @@ pagefault(){
     panic("Page Fault: Cannot find pte");
   }
   uint pa = PTE_ADDR(*pte);
-  /*
-  if((counter_struct.counter[pa/PGSIZE]<=1)){
-    cprintf("Counter is %d\n",counter_struct.counter[pa/PGSIZE]);
-    panic("Page Fault: Page not shared");
-  }*/
+  //cprintf("old PA is: %d\n",pa>>12);
 
-  if(!(*pte & PTE_S)){
-    panic("Page Fault: Page not writtable");
-  }
   if(!(*pte & PTE_P)){
     panic("Page Fault: Page not present");
   }
+  
+  if(!(*pte & PTE_S)){
+    panic("Page Fault: Page not writtable");
+  }
+
+  if((counter_struct.counter[pa/PGSIZE]<=1)){
+    if(counter_struct.counter[pa/PGSIZE]==1){
+      *pte=(*pte)|(PTE_W);
+      *pte=(*pte)&(~PTE_S);
+      //cprintf("Change Flags\n");
+      lcr3(V2P(myproc()->pgdir));
+      return;
+    }
+    else
+      panic("Page Fault: Page has 0 reference");
+  }
+
   //uint ppn=pa>>12;
 
   char* new_VA;
@@ -507,15 +539,12 @@ pagefault(){
   //change the flag of the old page
   acquire(&counter_struct.counter_lock);
   counter_struct.counter[pa/PGSIZE]=counter_struct.counter[pa/PGSIZE]-1;
-  if(counter_struct.counter[pa/PGSIZE]==1){
-    //it is no longer shared
-    *pte=(*pte)|PTE_W; //add a writtable flag
-    *pte=(*pte)&(~PTE_S); //set its share flag to 0
-  }
 
   //change the flag of the new page
   counter_struct.counter[new_PA/PGSIZE]=1;
   *pte=(new_PA)|(PTE_P)|(PTE_W)|(PTE_U);
+  //cprintf("Make new copy\n",pa>>12);
+  //cprintf("new PA is: %d\n",new_PA>>12);
   release(&counter_struct.counter_lock);
   lcr3(V2P(myproc()->pgdir));
   //cprintf("Ended page fault\n");

@@ -540,16 +540,17 @@ procdump(void)
     for(uint first_10_bits=0;first_10_bits<NPDENTRIES;first_10_bits++){
       uint page_table_addr=(uint) (page_directory[first_10_bits]);
 
-      if(page_table_addr & PTE_P && page_table_addr&PTE_U){
+      if(page_table_addr & PTE_P){
         //if the directory says there's some pages in this page table
         pte_t *page_table = (pte_t*)P2V(PTE_ADDR(page_table_addr));
 
         //go over the page table
         for(uint second_10_bits=0;second_10_bits<NPTENTRIES;second_10_bits++){
+          uint VPN=(first_10_bits<<10)+second_10_bits;
+
           uint PA=(uint) (page_table[second_10_bits]);
-          if(PA & PTE_P && PA&PTE_U){
+          if((PA & PTE_P) && (PA&PTE_U)){
             //if this is a present & user page, print it
-            uint VPN=(first_10_bits<<10)+second_10_bits;
             uint PPN=(PA>>12);
             char* writtable="n";
             if(PA&PTE_W){

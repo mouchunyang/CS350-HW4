@@ -634,10 +634,12 @@ SYSCALL(uptime)
  3ba:	b8 0e 00 00 00       	mov    $0xe,%eax
  3bf:	cd 40                	int    $0x40
  3c1:	c3                   	ret    
- 3c2:	66 90                	xchg   %ax,%ax
- 3c4:	66 90                	xchg   %ax,%ax
- 3c6:	66 90                	xchg   %ax,%ax
- 3c8:	66 90                	xchg   %ax,%ax
+
+000003c2 <procdump>:
+SYSCALL(procdump)
+ 3c2:	b8 16 00 00 00       	mov    $0x16,%eax
+ 3c7:	cd 40                	int    $0x40
+ 3c9:	c3                   	ret    
  3ca:	66 90                	xchg   %ax,%ax
  3cc:	66 90                	xchg   %ax,%ax
  3ce:	66 90                	xchg   %ax,%ax
