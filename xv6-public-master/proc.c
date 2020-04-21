@@ -5,7 +5,7 @@
 #include "mmu.h"
 #include "x86.h"
 #include "proc.h"
-#include "spinlock.h"
+#include "vm.h"
 
 struct {
   struct spinlock lock;
@@ -498,6 +498,9 @@ kill(int pid)
   return -1;
 }
 
+
+//changed:
+extern counter_struct_def counter_struct;
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
@@ -556,6 +559,11 @@ procdump(void)
             if(PA&PTE_W){
               writtable="y";
             }
+            if(PA&PTE_S){
+              if(counter_struct.counter[PPN]==1){
+                writtable="y";
+              }
+            }
             cprintf("%d -> %d, %s\n",VPN,PPN,writtable);
           }
         }
@@ -563,3 +571,5 @@ procdump(void)
     }
   }
 }
+
+
