@@ -36,3 +36,7 @@ Task2:
 
 Task3:
 	Add a new system call called "procdump()". This involves changes in defs.h, usys.S, sysproc.c, user.h, syscall.h and syscall.c, but the process of adding a new system call is exactly the same as what we did since Project 1.
+
+Explanation testcow.c:
+The program first allocates two more pages. Then it calls fork to create a child process. The page table entries are the same except virtual address2, because it is just fork.
+Then child process changes last two pages. So physical pages that parent and child's last two physical addresses point to become different, and they are writable. The the page table entries should remain the same.
