@@ -1,0 +1,38 @@
+Changes:
+Task1:
+	proc.c: 
+		procdump():
+			Add additional functionalities at procdump(). Below the original codes, add a loop that goes over the page directory. For each existed entry in the page directory, go to the page table it refers to. For each existed entry in the page table, if it is "User", print out its PPN (first 20 bits) and whether it is writtable.
+
+Task2:
+	mmu.h:
+		Add a new flag PTE_S. This is called the "Shared" flag, and is used to distinguish between a shared writtable page and a non-writtable page.
+
+	vm.h: 
+		Create a new file called vm.h, which contains a global struct for storing a counter for each physical page (count how many processes share this physical page) and a spinlock for this array for synchronization purpose.
+		The lock is always acquired before changing the counters.
+
+	vm.c: 
+		inituvm():
+			Add 1 to the counter of the physical page that the newly allocated memory refers to.
+
+		allocuvm():
+			Inside the for loop, for each newly allocated page, add 1 to its counter.
+
+		deallocuvm():
+			For each deallocated page, subtract 1 from its counter. However, instead of directly calling kfree() on that page, we only call it when the counter becomes 0, which means no process needs this page.
+
+		cow():
+			Instead of copying each page of the parent's pgdir, we make the child's page directory and page tables exactly the same as the parent's. To do so, we first create a new page directory for the child (the instruction says it is fine to copy page tables).
+			Then, we go over each entry in the parent's page table. If the entry is originally writtable, we set its "Shared" flag to 1, and change it to non-writtable. We then uses mappages() on the child's page directory to add this (Virtual Address->Physical Address) mapping to the child's page table.
+
+		pagefault():
+			When raising a pagefault, we first check if the address is valid and the entry is present. If not, we panic. We also check if the page has a "Shared" flag. If not, the page is originally non-writtable, so we also panic. 
+			Then, if we find that the page is only used by one process, we just cancel its "Shared" flag and change it to writtable. Otherwise, if it is shared by multiple process, we create a new physical page by calling kalloc() and memmove(), increase the counter of the new page (it should be present, user and writtable), and decrease the counter of the old page. 
+
+	proc.c:
+		fork():
+			Instead of calling copyuvm() when forking a new process, we call cow() implemented by us.
+
+Task3:
+	Add a new system call called "procdump()". This involves changes in defs.h, usys.S, sysproc.c, user.h, syscall.h and syscall.c, but the process of adding a new system call is exactly the same as what we did since Project 1.
