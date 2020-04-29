@@ -1,3 +1,4 @@
+We are copying (not sharing) page table for each new process (the instruction says this approach is fine), so some of the physical page numbers are different from the instruction's example. But all shared pages still have the same physical page numbers.
 Changes:
 Task1:
 	proc.c: 
